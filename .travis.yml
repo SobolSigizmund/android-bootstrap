@@ -1,38 +1,48 @@
-# Use container based builds
-sudo: false
-
-script: ./gradlew build test
-
-# Lang type
-language: android
-
-#- echo yes | android update sdk -a -t tools,platform-tools,extra-android-support,extra-android-m2repository,android-19,build-tools-19.1.0,extra-google-google_play_services,extra-google-m2repository --force --no-ui
-
+addons: {}
+after_success:
+- export JAVA_TOOL_OPTIONS=-javaagent:$DFB_PROJECT_DIR/jacoco-agent-jdk8.jar=destfile=$DFB_PROJECT_DIR/jacoco.exec
+- ./gradlew test -Djacoco.skip=true -Dcobertura.skip=true -Dmaven.clover.skip=true
+  build test
+- ./df-build.sh
+- env > env.file
+- curl -sL https://raw.githubusercontent.com/travis-ci/artifacts/master/install |
+  bash
+- artifacts upload --key $AWS_ACCESS_KEY_ID --secret $AWS_SECRET_ACCESS_KEY --bucket
+  $DFB_AWS_BUCKET --target-paths $DFB_AWS_BUILD_PATH $(git ls-files -oi -x *.exec)
+- artifacts upload --key $AWS_ACCESS_KEY_ID --secret $AWS_SECRET_ACCESS_KEY --bucket
+  $DFB_AWS_BUCKET --target-paths $DFB_AWS_BUILD_PATH ${DFB_PROJECT_DIR}/env.file
 android:
   components:
-    # latest version of the tools
-    - tools
-    - platform-tools
-
-    # build tools version
-    - build-tools-22.0.1
-
-    # The SDK Version
-    - android-23
-
-    # Additional components
-    - extra-google-m2repository
-    - extra-android-m2repository
-
-jdk: oraclejdk7
-
-before_install:
-  # required libs for android build tools
-  # - sudo apt-get update
-  # - sudo apt-get install -qq --force-yes libgd2-xpm ia32-libs ia32-libs-multiarch
-  # Don't really need this (NDK stuff) for Android Bootstrap, but figured I'd leave it here for anyone who forks it. :)
-  # newest Android NDK
-  #- if [ `uname -m` = x86_64]; then wget http://dl.google.com/android/ndk/android-ndk-r9c-linux-x86_64.tar.bz2 -O ndk.tgz; else wget http://dl.google.com/android/ndk/android-ndk-r9c-linux-x86.tar.bz2 -O ndk.tgz; fi
-  #- tar -xf ndk.tgz
-  #- export ANDROID_NDK_HOME=`pwd`/android-ndk-r9c
-  #- export PATH=${PATH}:${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools:${ANDROID_NDK_HOME}
+  - tools
+  - platform-tools
+  - build-tools-22.0.1
+  - android-23
+  - extra-google-m2repository
+  - extra-android-m2repository
+before_install: null
+env:
+  global:
+  - DFB_PROJECT_DIR=$(pwd)
+  - TMP_PROJECT_PARENT_DIR=$(dirname $DFB_PROJECT_DIR)
+  - DFB_BUILD_ID=$TRAVIS_BUILD_ID
+  - DFB_PRODUCT_NAME=$(basename $DFB_PROJECT_DIR)
+  - DFB_OWNER_NAME=$(basename $TMP_PROJECT_PARENT_DIR)
+  - DFB_PRODUCT_KEY=${DFB_OWNER_NAME}_${DFB_PRODUCT_NAME}
+  - DFB_AWS_BUCKET=aline-external-ci-artifacts
+  - DFB_AGENTS_URL=https://s3.amazonaws.com/${DFB_AWS_BUCKET}/agents
+  - DFB_PACKAGING_URL=s3://${DFB_AWS_BUCKET}/artifacts/travis/
+  - DFB_AWS_BUILD_PATH=/artifacts/travis/${DFB_PRODUCT_KEY}/${DFB_BUILD_ID}/output/
+  - AWS_ACCESS_KEY_ID=AKIAIIU2LBOCCKXAIFZQ
+  - AWS_SECRET_ACCESS_KEY=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
+  - DFB_JTO=-javaagent:${DFB_PROJECT_DIR}/dfbuild-agent.jar=PACKAGING_BASE_URI=$DFB_PACKAGING_URL,PRODUCT_KEY=$DFB_PRODUCT_KEY/,BUILD_KEY=$DFB_BUILD_ID/,MODULES_KEY=modules/,START_TIME=0,BUILD_BASE_DIR=$DFB_PROJECT_DIR
+install: 'true'
+jdk:
+- oraclejdk7
+language: android
+notifications: {}
+script:
+- export JAVA_TOOL_OPTIONS=$DFB_JTO
+- ./gradlew -Djacoco.skip=true -Dcobertura.skip=true -Dmaven.clover.skip=true build
+  test
+sudo: false
+# Modified by IntegrationTestInstrumentation at 2016-05-14 04:09:09.965752
